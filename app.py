@@ -8,42 +8,44 @@ st.set_page_config(page_title="🌱 식물 식별기", layout="centered")
 st.title("🌱 Pl@ntNet 기반 식물 식별 앱")
 st.subheader("사진을 업로드하면 Pl@ntNet API를 통해 식물 종을 식별합니다.")
 
-# ⚠️ API 키를 코드에 직접 삽입했습니다.
+# ⚠️ API 키
 API_KEY = "2b10R9ZrSaICw0NXpyKPHagbO"
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 
-# --- 식물 식별 함수 (수정됨: uploaded_file을 직접 받음) ---
+# --- 식물 식별 함수 (가장 안정적인 POST 요청 방식으로 재수정) ---
 def identify_plant(uploaded_file, api_key):
     """
     Pl@ntNet API에 이미지를 전송하고 식별 결과를 반환합니다.
     """
-    # ⚠️ Streamlit 파일 객체를 사용하기 위해 포인터를 처음으로 돌립니다.
-    uploaded_file.seek(0)
+    # ⚠️ 400 에러 방지를 위해 Streamlit 파일 객체에서 순수한 바이트 데이터를 추출
+    uploaded_file.seek(0) # 파일 포인터를 처음으로 돌림
+    image_data = uploaded_file.read()
     
     # API 요청을 위한 데이터 준비 (multipart/form-data)
     # files 딕셔너리 구조: {'필드 이름': (파일명, 파일 바이트 데이터, MIME 타입)}
     files = {
-        'images': (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)
+        'images': (uploaded_file.name, image_data, 'image/jpeg') # MIME 타입을 JPEG으로 고정
     }
 
-    # API 요청 파라미터
+    # API 요청 파라미터 (organs 파라미터를 추가하여 Bad Request 방지)
     params = {
         'api-key': api_key,
-        'project': 'all' 
+        'project': 'all',
+        # 💡 필수 파라미터: 사진에 포함된 식물 부위를 명시. 여기서는 모든 부위를 포함하도록 기본 설정.
+        'organs': 'flower,leaf,bark,fruit' 
     }
     
     with st.spinner('🔎 식물 식별 중... 잠시만 기다려 주세요.'):
         try:
             # API로 POST 요청 보내기
             response = requests.post(PLANTNET_URL, params=params, files=files)
-            response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
+            response.raise_for_status() # HTTP 오류가 발생하면 예외 발생 (4xx, 5xx)
 
             return response.json()
 
         except requests.exceptions.RequestException as e:
-            # 400 Bad Request 오류를 포함한 모든 요청 오류 처리
             st.error(f"API 요청 오류가 발생했습니다. 상세: {e}")
-            st.warning("Pl@ntNet API가 요청 데이터를 올바르게 받지 못했습니다. 업로드한 파일 형식을 확인해주세요.")
+            st.warning("Pl@ntNet API가 요청 데이터를 올바르게 받지 못했습니다. 파일 형식이나 요청 구조를 다시 확인해주세요.")
             return {"error": f"API 요청 중 오류 발생: {e}"}
 
 # --- 메인 앱 로직 ---
@@ -66,7 +68,6 @@ if uploaded_file is not None:
         result = identify_plant(uploaded_file, API_KEY)
         
         if 'error' in result:
-            # 오류는 이미 identify_plant 함수 내에서 출력됨
             pass
         
         elif result.get('results'):
@@ -85,7 +86,6 @@ if uploaded_file is not None:
             st.markdown(f"**학명:** *{scientific_name}*")
             st.metric(label="신뢰도", value=f"{score:.2f}%")
 
-            # 추가 결과 (선택 사항)
             if len(result['results']) > 1:
                 st.subheader("다른 가능성이 있는 결과")
                 for r in result['results'][1:]:
