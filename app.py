@@ -12,7 +12,7 @@ st.subheader("사진을 업로드하면 Pl@ntNet API를 통해 식물 종을 식
 API_KEY = "2b10R9ZrSaICw0NXpyKPHagbO"
 PLANTNET_URL = "https://my-api.plantnet.org/v2/identify/all"
 
-# --- 식물 식별 함수 (Organs를 폼 데이터로 전송하도록 수정) ---
+# --- 식물 식별 함수 (가장 흔히 성공하는 방식으로 재조정) ---
 def identify_plant(uploaded_file, api_key):
     """
     Pl@ntNet API에 이미지를 전송하고 식별 결과를 반환합니다.
@@ -21,32 +21,27 @@ def identify_plant(uploaded_file, api_key):
     uploaded_file.seek(0) 
     
     # 1. 파일 데이터 준비 (files 딕셔너리)
-    # Streamlit 파일 객체에서 순수한 바이트 데이터를 읽습니다.
+    # files 딕셔너리 구조: {'images': (파일명, 파일 바이트 데이터, MIME 타입)}
     files = {
+        # Streamlit이 제공하는 MIME 타입 사용
         'images': (uploaded_file.name, uploaded_file.read(), uploaded_file.type)
     }
-    
+
     # 2. 쿼리 파라미터 준비 (params 딕셔너리)
     params = {
         'api-key': api_key,
-    }
-    
-    # 3. 폼 데이터 파라미터 준비 (data 딕셔너리)
-    # organs 및 project를 URL 쿼리가 아닌 폼 데이터로 전송하도록 시도
-    data = {
+        # project와 organs는 URL 쿼리로 전송
         'project': 'all',
-        # organs를 쉼표로 구분된 문자열로 전송
         'organs': 'flower,leaf,bark,fruit' 
     }
     
     with st.spinner('🔎 식물 식별 중... 잠시만 기다려 주세요.'):
         try:
-            # API로 POST 요청 보내기: URL 쿼리(api-key)와 files/data(이미지/organs/project)를 분리 전송
+            # API로 POST 요청 보내기: URL 쿼리(api-key, project, organs)와 files(이미지)를 분리 전송
             response = requests.post(
                 PLANTNET_URL, 
-                params=params, # URL 쿼리 파라미터 (API Key)
-                files=files,   # 이미지 파일
-                data=data      # 추가 폼 데이터 (organs, project)
+                params=params, # URL 쿼리 파라미터
+                files=files    # 이미지 파일
             )
             response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
 
@@ -54,20 +49,26 @@ def identify_plant(uploaded_file, api_key):
 
         except requests.exceptions.RequestException as e:
             st.error(f"API 요청 오류가 발생했습니다. 상세: {e}")
-            # 서버가 보낸 구체적인 응답 본문을 확인해 볼 수도 있습니다.
-            # st.error(f"서버 응답: {response.text}") 
-            st.warning("요청 구조를 다시 확인해주세요.")
+            
+            # 서버 응답 본문 출력 (오류의 구체적인 원인 힌트가 있을 수 있음)
+            try:
+                st.error(f"서버 응답 본문: {response.text}")
+            except Exception:
+                pass
+                
+            st.warning("요청 구조를 다시 확인해주세요. (API 키, 파일 이름, 파일 타입)")
             return {"error": f"API 요청 중 오류 발생: {e}"}
 
-# --- 메인 앱 로직 (생략: 변경 없음) ---
+# --- 메인 앱 로직 (변경 없음) ---
 st.info("API 키가 설정되었습니다. 이제 식물 사진을 업로드해 주세요.")
 uploaded_file = st.file_uploader("📷 식물 사진을 업로드하세요", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
     # 1. 업로드된 이미지 처리 및 표시
     try:
-        # PIL.Image.open은 file-like object를 받으므로 seek(0) 없이 사용 가능
-        image = Image.open(uploaded_file)
+        # 파일 포인터를 PIL.Image.open이 받으므로, 이 시점에서는 seek(0)을 하지 않습니다.
+        # seek(0)은 identify_plant 함수 내부에서 처리됩니다.
+        image = Image.open(uploaded_file) 
         st.image(image, caption="업로드된 이미지", use_column_width=True)
         
     except Exception as e:
@@ -80,7 +81,7 @@ if uploaded_file is not None:
         result = identify_plant(uploaded_file, API_KEY)
         
         if 'error' in result:
-            pass # 오류는 함수 내에서 이미 출력됨
+            pass
         
         elif result.get('results'):
             st.success("✅ 식별 완료!")
