@@ -29,13 +29,12 @@ def identify_plant(uploaded_file, api_key):
     # 2. URL 쿼리 파라미터 준비
     params = {
         'api-key': api_key,
-        # 'organs'는 필수적이며 URL 쿼리로 전송
-        'organs': 'flower,leaf,bark,fruit' 
+        # project와 organs 파라미터는 400 Bad Request 오류를 일으키므로 제거함.
     }
     
     with st.spinner('🔎 식물 식별 중...'):
         try:
-            # POST 요청 보내기
+            # API로 POST 요청 보내기: URL 쿼리(api-key)와 files(이미지)만 전송
             response = requests.post(
                 PLANTNET_URL, 
                 params=params, 
@@ -47,8 +46,8 @@ def identify_plant(uploaded_file, api_key):
 
         except requests.exceptions.RequestException as e:
             st.error(f"API 요청 오류가 발생했습니다. 상세: {e}")
-            # 서버 응답 본문 출력 시도
             try:
+                # 서버 응답 본문이 오류 원인을 알려줄 수 있으므로 출력
                 st.error(f"서버 응답 본문: {response.text}")
             except Exception:
                 pass
@@ -96,10 +95,10 @@ if uploaded_file is not None:
             st.markdown(f"**학명:** *{scientific_name}*")
             st.metric(label="신뢰도", value=f"{score:.2f}%")
 
-            # 추가 결과 표시
+            # 추가 결과 표시 (최대 3개)
             if len(result['results']) > 1:
                 st.subheader("다른 가능성이 있는 결과")
-                for r in result['results'][1:4]: # 최대 3개만 표시
+                for r in result['results'][1:4]: 
                     r_score = r['score'] * 100
                     r_info = r['species']
                     r_common = r_info['commonNames'][0] if r_info.get('commonNames') else "알 수 없음"
